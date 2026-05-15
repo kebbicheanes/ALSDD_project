@@ -3,6 +3,8 @@
 #include<string.h>
 #include"../headers/LL_and_queues.h"
 
+void swapData(TList *a, TList *b);
+
 TList* getPersonality(File *f){
     TList *head = NULL;
     TList *last = NULL;
@@ -57,7 +59,7 @@ TList* getDatePersonality(File *f){
     if(strlen(line)< 3) continue;
 
     char *braceStart = strchr(line, '{');
-    char *braceEnd = strchr(line, '{');
+    char *braceEnd = strchr(line, '}');   /* BUG FIX: was '{', must be '}' */
 
     if(braceStart && braceEnd){
          TList *newnode = (TList*)malloc(sizeof(TList));
@@ -153,31 +155,31 @@ void getInfoByDates2(TList *s, TList *DoD){
 
 
 }
-TList* sortWord(TList *syn){
+TList* sortWord(TList *syn) {
+    if (syn == NULL || syn->next == NULL) return syn;
 
-     if (syn == NULL || syn->next == NULL) return syn;
+    int swapped;
+    TList *ptr1;
+    TList *lptr = NULL;
 
-     int swapped;
-     TList *ptr1;
-     TList *lptr = NULL;
-
-      do {
+    do {
         swapped = 0;
         ptr1 = syn;
 
-         while (ptr1->next != lptr) {
+        while (ptr1->next != lptr) {
             
             if (strcmp(ptr1->name, ptr1->next->name) > 0) {
                 swapData(ptr1, ptr1->next);
                 swapped = 1;
             }
             ptr1 = ptr1->next;
-         }
+        }
         lptr = ptr1;
-     } while (swapped);
+    } while (swapped);
 
-     return syn;
+    return syn;
 }
+
 void swapData(TList *a, TList *b) {
     char tempName[100], tempDef[1024], tempDoB[20], tempDoD[256];
 
@@ -459,4 +461,221 @@ TQueue* toQueue(TList *merged) {
         current = current->next;
     }
     return queue;
-}   
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   INTERNAL HELPERS
+   ═══════════════════════════════════════════════════════════════════════ */
+
+static void freeList(TList *head) {
+    while (head) { TList *tmp = head->next; free(head); head = tmp; }
+}
+
+static void freeQueue(TQueue *head) {
+    while (head) { TQueue *tmp = head->next; free(head); head = tmp; }
+}
+
+static void printQueue(TQueue *q) {
+    if (!q) { printf("  (empty)\n"); return; }
+    while (q) {
+        printf("  [Q] %s", q->name);
+        if (q->definition[0]) printf(" | %s", q->definition);
+        printf("\n");
+        q = q->next;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   runLibrary()  —  interactive menu
+   ═══════════════════════════════════════════════════════════════════════ */
+void runLibrary(void) {
+
+    FILE *f = fopen("data.txt", "r+");
+    if (!f) { perror("Cannot open data.txt"); return; }
+
+    TList *s = getPersonality(f);
+    TList *a = getDatePersonality(f);
+
+    int choice;
+
+    do {
+        printf("\n╔══════════════════════════════════════════╗\n");
+        printf("║         PERSONALITIES MANAGER            ║\n");
+        printf("╠══════════════════════════════════════════╣\n");
+        printf("║  1.  Display all personalities           ║\n");
+        printf("║  2.  Sort alphabetically by name         ║\n");
+        printf("║  3.  Sort by name length                 ║\n");
+        printf("║  4.  Sort by birth year                  ║\n");
+        printf("║  5.  Search by Date of Birth             ║\n");
+        printf("║  6.  Search by Date of Death             ║\n");
+        printf("║  7.  Find palindrome names               ║\n");
+        printf("║  8.  Find similar by date string         ║\n");
+        printf("║  9.  Find by exact date (day/month/year) ║\n");
+        printf("║  10. Add a personality                   ║\n");
+        printf("║  11. Add an event                        ║\n");
+        printf("║  12. Update a personality                ║\n");
+        printf("║  13. Delete a personality                ║\n");
+        printf("║  14. Merge first nodes of both lists     ║\n");
+        printf("║  15. Show name queue (sName)             ║\n");
+        printf("║  16. Show age queue (ageP)               ║\n");
+        printf("║  17. Show full queue (toQueue)           ║\n");
+        printf("║  0.  Exit                                ║\n");
+        printf("╚══════════════════════════════════════════╝\n");
+        printf("  Choice: ");
+        scanf("%d", &choice);
+        getchar(); /* consume newline */
+
+        switch (choice) {
+
+            case 1:
+                printf("\n--- All personalities ---\n");
+                printList(s);
+                break;
+
+            case 2:
+                s = sortWord(s);
+                printf("\n--- Sorted alphabetically ---\n");
+                printList(s);
+                break;
+
+            case 3:
+                s = sortWord2(s);
+                printf("\n--- Sorted by name length ---\n");
+                printList(s);
+                break;
+
+            case 4:
+                a = sortPersonality(a);
+                printf("\n--- Sorted by birth year (desc) ---\n");
+                printList(a);
+                break;
+
+            case 5:
+                getInfoByDates(s, a);
+                break;
+
+            case 6:
+                getInfoByDates2(s, a);
+                break;
+
+            case 7: {
+                TList *pals = palindromeName(s);
+                printf("\n--- Palindrome names ---\n");
+                printList(pals);
+                freeList(pals);
+                break;
+            }
+
+            case 8: {
+                char word[50];
+                printf("Enter date string to search (e.g. 1879): ");
+                scanf("%s", word);
+                TList *sim = similarPersonality(a, word);
+                printf("\n--- Similar by date string '%s' ---\n", word);
+                printList(sim);
+                freeList(sim);
+                break;
+            }
+
+            case 9: {
+                date d;
+                printf("Enter day month year (e.g. 14 3 1879): ");
+                scanf("%d %d %d", &d.day, &d.month, &d.year);
+                TList *cnt = countPersonality(a, &d);
+                printf("\n--- Matching %02d/%02d/%d ---\n", d.day, d.month, d.year);
+                printList(cnt);
+                freeList(cnt);
+                break;
+            }
+
+            case 10: {
+                char name[100], dob[20], dod[20];
+                printf("Name: ");    fgets(name, sizeof(name), stdin); name[strcspn(name,"\n")]=0;
+                printf("DoB (DD/MM/YYYY): "); scanf("%s", dob);
+                printf("DoD (DD/MM/YYYY): "); scanf("%s", dod);
+                getchar();
+                s = addPersonality(s, a, name, dob, dod);
+                printf("Personality '%s' added.\n", name);
+                break;
+            }
+
+            case 11: {
+                char evName[100], evDate[20];
+                printf("Event name: "); fgets(evName, sizeof(evName), stdin); evName[strcspn(evName,"\n")]=0;
+                printf("Date (DD/MM/YYYY): "); scanf("%s", evDate);
+                getchar();
+                a = addEvents(a, evName, evDate);
+                printf("Event '%s' added.\n", evName);
+                break;
+            }
+
+            case 12: {
+                char name[100], def[1024], dob[20], dod[20];
+                printf("Name to update: "); fgets(name, sizeof(name), stdin); name[strcspn(name,"\n")]=0;
+                printf("New definition: "); fgets(def, sizeof(def), stdin); def[strcspn(def,"\n")]=0;
+                printf("New DoB (DD/MM/YYYY): "); scanf("%s", dob);
+                printf("New DoD (DD/MM/YYYY): "); scanf("%s", dod);
+                getchar();
+                s = updatePersonality(f, s, a, name, def, dob, dod);
+                printf("Personality '%s' updated.\n", name);
+                break;
+            }
+
+            case 13: {
+                char name[100];
+                printf("Name to delete: "); fgets(name, sizeof(name), stdin); name[strcspn(name,"\n")]=0;
+                s = deletepersonality(f, s, a, name);
+                printf("Personality '%s' deleted.\n", name);
+                break;
+            }
+
+            case 14: {
+                if (s && a) {
+                    TList *merged = mergeNodes(s, a);
+                    printf("\n--- Merged node ---\n");
+                    printList(merged);
+                    freeList(merged);
+                } else {
+                    printf("One of the lists is empty.\n");
+                }
+                break;
+            }
+
+            case 15: {
+                TQueue *q = sName(s);
+                printf("\n--- Name queue ---\n");
+                printQueue(q);
+                freeQueue(q);
+                break;
+            }
+
+            case 16: {
+                TQueue *q = ageP(a);
+                printf("\n--- Age queue (sorted by birth year) ---\n");
+                printQueue(q);
+                freeQueue(q);
+                break;
+            }
+
+            case 17: {
+                TQueue *q = toQueue(s);
+                printf("\n--- Full queue (name + definition) ---\n");
+                printQueue(q);
+                freeQueue(q);
+                break;
+            }
+
+            case 0:
+                printf("Goodbye!\n");
+                break;
+
+            default:
+                printf("Invalid choice. Please enter a number between 0 and 17.\n");
+        }
+
+    } while (choice != 0);
+
+    freeList(s);
+    freeList(a);
+    fclose(f);
+}
